@@ -27,4 +27,4 @@ jobs:
           SF_ORG_A_PASSWORD: ${{ secrets.SF_ORG_A_PASSWORD }}
           SF_ORG_B_USERNAME: ${{ secrets.SF_ORG_B_USERNAME }}
           SF_ORG_B_PASSWORD: ${{ secrets.SF_ORG_B_PASSWORD }}
-        run: ./scripts/SyncMetadata.ps1
+        run: ./scripts/ps1/SyncMetadata.ps1
