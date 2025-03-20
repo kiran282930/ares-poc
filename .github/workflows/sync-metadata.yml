@@ -1,0 +1,30 @@
+name: Salesforce Metadata Sync
+
+on:
+  schedule:
+    # Run daily at midnight UTC
+    - cron: "0 0 * * *"
+  workflow_dispatch:  # Allows manual execution for testing
+
+jobs:
+  sync-metadata:
+    runs-on: windows-latest  # Use Windows runner for PowerShell
+
+    steps:
+      # Step 1: Check out the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Install Salesforce CLI
+      - name: Install Salesforce CLI
+        run: npm install --global sfdx-cli
+
+      # Step 3: Run PowerShell Script with Credentials
+      - name: Execute Sync Script
+        shell: pwsh
+        env:
+          SF_ORG_A_USERNAME: ${{ secrets.SF_ORG_A_USERNAME }}
+          SF_ORG_A_PASSWORD: ${{ secrets.SF_ORG_A_PASSWORD }}
+          SF_ORG_B_USERNAME: ${{ secrets.SF_ORG_B_USERNAME }}
+          SF_ORG_B_PASSWORD: ${{ secrets.SF_ORG_B_PASSWORD }}
+        run: ./scripts/SyncMetadata.ps1
