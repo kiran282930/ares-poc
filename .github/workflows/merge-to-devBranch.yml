@@ -1,0 +1,104 @@
+name: Validate, Merge, and Deploy Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
+    paths:
+      - "force-app/**"
+
+  push:
+    branches:
+      - main
+
+jobs:
+  # Step 1: Validate PR for System.debug statements
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the PR branch
+      - name: "Checkout Source Code"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Scan for System.debug in the codebase
+      - name: "Scan for System.debug Logs"
+        run: |
+          echo "Scanning for System.debug logs in the codebase..."
+          if grep -r "System.debug" force-app/; then
+            echo "Error: System.debug statements found in the codebase!"
+            exit 1
+          else
+            echo "No System.debug logs found. Validation passed!"
+          fi
+        shell: bash
+
+  # Step 2: Merge PR if validation passed
+  merge-pr:
+    needs: validate-pr
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == false
+    steps:
+      # Merge the PR into the main branch
+      - name: "Merge Pull Request"
+        uses: ahmadnassri/action-auto-merge@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Step 3: Deploy to Dev Copy Org
+  deploy-to-dev-copy:
+    needs: merge-pr
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the main branch
+      - name: "Checkout Source Code"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Install Salesforce CLI
+      - name: "Install Salesforce CLI"
+        run: npm install --global @salesforce/cli
+
+      # Authenticate to Dev Copy Org
+      - name: "Authenticate to Dev Copy Org"
+        run: sf org login sfdx-url -f ${{ secrets.SFDX_AUTH_URL1 }} --setalias DevCopyOrg
+
+      # Deploy to Dev Copy Org
+      - name: "Deploy to Dev Copy Org"
+        run: |
+          echo "Deploying to Dev Copy Org..."
+          sf project deploy start --source-dir force-app --target-org DevCopyOrg --checkonly
+
+      # Run Apex Tests
+      - name: "Run Apex Tests on Dev Copy Org"
+        run: |
+          echo "Running Apex tests on Dev Copy Org..."
+          sf apex run test --target-org DevCopyOrg --resultformat human
+
+  # Step 4: Deploy to Dev Org if validation passes
+  deploy-to-dev-org:
+    needs: deploy-to-dev-copy
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the main branch
+      - name: "Checkout Source Code"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Install Salesforce CLI
+      - name: "Install Salesforce CLI"
+        run: npm install --global @salesforce/cli
+
+      # Authenticate to Dev Org
+      - name: "Authenticate to Dev Org"
+        run: sf org login sfdx-url -f ${{ secrets.SFDX_AUTH_URL2 }} --setalias DevOrg
+
+      # Deploy to Dev Org
+      - name: "Deploy to Dev Org"
+        run: |
+          echo "Deploying validated code to Dev Org..."
+          sf project deploy start --source-dir force-app --target-org DevOrg
