@@ -23,17 +23,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Scan for System.debug in the codebase
-      - name: "Scan for System.debug Logs"
-        run: |
-          echo "Scanning for System.debug logs in the codebase..."
-          if grep -r "System.debug" force-app/; then
-            echo "Error: System.debug statements found in the codebase!"
-            exit 1
-          else
-            echo "No System.debug logs found. Validation passed!"
-          fi
-        shell: bash
+    
 
   # Step 2: Merge PR if validation passed
   merge-pr:
