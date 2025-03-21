@@ -1,44 +1,30 @@
-name: Salesforce CI/CD Pipeline
+name: Salesforce Metadata Sync
 
 on:
-  push:
-    branches:
-      - Feature_210325  # Trigger on any feature branch
+  schedule:
+    # Run daily at midnight UTC
+    - cron: "0 0 * * *"
+  workflow_dispatch:  # Allows manual execution for testing
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  sync-metadata:
+    runs-on: windows-latest  # Use Windows runner for PowerShell
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      # Step 1: Check out the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '16' # Adjust to your Node.js version requirement
+      # Step 2: Install Salesforce CLI
+      - name: Install Salesforce CLI
+        run: npm install --global sfdx-cli
 
-    - name: Install Salesforce CLI
-      run: |
-        npm install -g sfdx-cli
-
-    - name: Authenticate with Salesforce
-      run: |
-        echo ${DEV_AUTH_URL} > auth_url.txt
-        sfdx auth:sfdxurl:store -f auth_url.txt
-        rm auth_url.txt
-      env:
-        DEV_AUTH_URL: ${{ secrets.SFDX_AUTH_URL1 }}
-
-    - name: Deploy to Dev Org
-      run: |
-        sfdx force:source:deploy -p force-app --targetusername DevOrg
-
-    - name: Merge to Main Branch
-      if: success()
-      run: |
-        git config --global user.name "GitHub Actions Bot"
-        git config --global user.email "<your-email>"
-        git checkout main
-        git merge ${{ github.ref_name }}
-        git push
+      # Step 3: Run PowerShell Script with Credentials
+      - name: Execute Sync Script
+        shell: pwsh
+        env:
+          SF_ORG_A_USERNAME: ${{ secrets.SF_ORG_A_USERNAME }}
+          SF_ORG_A_PASSWORD: ${{ secrets.SF_ORG_A_PASSWORD }}
+          SF_ORG_B_USERNAME: ${{ secrets.SF_ORG_B_USERNAME }}
+          SF_ORG_B_PASSWORD: ${{ secrets.SF_ORG_B_PASSWORD }}
+        run: ./scripts/SyncMetadata.ps1
