@@ -1,36 +1,44 @@
-name: Salesforce Metadata Sync
+name: Salesforce CI/CD Pipeline
 
 on:
-  schedule:
-    - cron: "0 0 * * *"  # Runs daily at midnight UTC
-  workflow_dispatch:  # Allows manual execution
+  push:
+    branches:
+      - Feature_210325  # Trigger on any feature branch
 
 jobs:
-  sync-metadata:
-    runs-on: windows-latest  # Using Windows for PowerShell compatibility
+  deploy:
+    runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      # Step 2: Install Salesforce CLI
-      - name: Install Salesforce CLI
-        run: npm install --global @salesforce/cli
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16' # Adjust to your Node.js version requirement
 
-      # Step 3: Authenticate Source Org (ares1Org)
-      - name: Authenticate Source Org
-        run: |
-          sf org login web --setalias ares1Org --instance-url https://login.salesforce.com
-        shell: pwsh
+    - name: Install Salesforce CLI
+      run: |
+        npm install -g sfdx-cli
 
-      # Step 4: Authenticate Target Org (ares2Org)
-      - name: Authenticate Target Org
-        run: |
-          sf org login web --setalias ares2Org --instance-url https://login.salesforce.com
-        shell: pwsh
+    - name: Authenticate with Salesforce
+      run: |
+        echo ${DEV_AUTH_URL} > auth_url.txt
+        sfdx auth:sfdxurl:store -f auth_url.txt
+        rm auth_url.txt
+      env:
+        DEV_AUTH_URL: ${{ secrets.SFDX_AUTH_URL1 }}
 
-      # Step 5: Run PowerShell Script
-      - name: Execute Sync Script
-        shell: pwsh
-        run: ./scripts/SyncMetadata.ps1
+    - name: Deploy to Dev Org
+      run: |
+        sfdx force:source:deploy -p force-app --targetusername DevOrg
+
+    - name: Merge to Main Branch
+      if: success()
+      run: |
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "<your-email>"
+        git checkout main
+        git merge ${{ github.ref_name }}
+        git push
