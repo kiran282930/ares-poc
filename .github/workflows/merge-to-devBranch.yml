@@ -1,101 +1,50 @@
-name: Validate, Merge, and Deploy Pipeline
+name: Salesforce CI/CD Pipeline
 
 on:
-  pull_request:
-    types: [opened, synchronize]
-    branches:
-      - main
-    paths:
-      - "force-app/**"
-
   push:
     branches:
-      - main
+      - feature/*
 
 jobs:
-  # Step 1: Validate PR for System.debug statements
-  validate-pr:
+  validate-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      # Checkout the PR branch
-      - name: "Checkout Source Code"
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    # Step 1: Checkout the repository
+    - name: Checkout Repository
+      uses: actions/checkout@v2
 
-    
-  # Step 2: Merge PR if validation passed
-  merge-pr:
-    needs: validate-pr
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == false
-    steps:
-      # Merge the PR into the main branch
-      - name: Auto Merge PR
-        uses: peter-evans/create-pull-request@v5
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "[create-pull-request] automated change"
-          committer: GitHub <noreply@github.com>
-          author: kiran282930 <kiran282930@users.noreply.github.com>
-          branch: create-pull-request/patch
-          delete-branch: false
-          title: "Changes by create-pull-request action"
-          body: "Automated changes by [create-pull-request](https://github.com/peter-evans/create-pull-request) GitHub action"
-          draft: false
+    # Step 2: Authenticate Salesforce Org
+    - name: Authenticate Salesforce Dev Org
+      env:
+        SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL }}
+      run: sfdx auth:sfdxurl:store --setalias DevOrg --noninteractive
 
-  # Step 3: Deploy to Dev Copy Org
-  deploy-to-dev-copy:
-    needs: merge-pr
-    runs-on: ubuntu-latest
-    steps:
-      # Checkout the main branch
-      - name: "Checkout Source Code"
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    # Step 3: Install Salesforce CLI
+    - name: Install Salesforce CLI
+      uses: amtrack/sfdx-actions@v2
+      with:
+        version: latest
 
-      # Install Salesforce CLI
-      - name: "Install Salesforce CLI"
-        run: npm install --global @salesforce/cli
+    # Step 4: Run Code Validation
+    - name: Validate Code (Apex Tests, Lint, etc.)
+      run: |
+        sfdx force:source:push -u DevOrg
+        sfdx force:apex:test:run --resultformat human --outputdir test-results --wait 10
+        sfdx force:source:delete -u DevOrg -p force-app --noprompt
 
-      # Authenticate to Dev Copy Org
-      - name: "Authenticate to Dev Copy Org"
-        run: sf org login sfdx-url -f ${{ secrets.SFDX_AUTH_URL1 }} --setalias DevCopyOrg
+    # Step 5: Approve and Merge Code to Main
+    - name: Merge Code to Main Branch
+      if: success() && github.ref == 'refs/heads/feature/*'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { execSync } = require('child_process');
+          execSync('git checkout main');
+          execSync('git merge ${{ github.ref }}');
+          execSync('git push origin main');
 
-      # Deploy to Dev Copy Org
-      - name: "Deploy to Dev Copy Org"
-        run: |
-          echo "Deploying to Dev Copy Org..."
-          sf project deploy start --source-dir force-app --target-org DevCopyOrg --checkonly
-
-      # Run Apex Tests
-      - name: "Run Apex Tests on Dev Copy Org"
-        run: |
-          echo "Running Apex tests on Dev Copy Org..."
-          sf apex run test --target-org DevCopyOrg --resultformat human
-
-  # Step 4: Deploy to Dev Org if validation passes
-  deploy-to-dev-org:
-    needs: deploy-to-dev-copy
-    runs-on: ubuntu-latest
-    steps:
-      # Checkout the main branch
-      - name: "Checkout Source Code"
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # Install Salesforce CLI
-      - name: "Install Salesforce CLI"
-        run: npm install --global @salesforce/cli
-
-      # Authenticate to Dev Org
-      - name: "Authenticate to Dev Org"
-        run: sf org login sfdx-url -f ${{ secrets.SFDX_AUTH_URL2 }} --setalias DevOrg
-
-      # Deploy to Dev Org
-      - name: "Deploy to Dev Org"
-        run: |
-          echo "Deploying validated code to Dev Org..."
-          sf project deploy start --source-dir force-app --target-org DevOrg
+    # Step 6: Deploy to Dev Org
+    - name: Deploy to Development Org
+      run: |
+        sfdx force:source:deploy -u DevOrg -p force-app
