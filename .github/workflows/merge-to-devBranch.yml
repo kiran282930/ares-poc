@@ -1,0 +1,41 @@
+name: Salesforce CI/CD Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-deploy:
+    name: Validate and Deploy to Salesforce
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # Set up Salesforce CLI (sfdx)
+      - name: Install Salesforce CLI
+        run: |
+          sudo npm install --global sfdx-cli
+
+      # Authenticate with Salesforce Org
+      - name: Authenticate with Salesforce Org
+        env:
+          SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL1 }}
+        run: |
+          echo $SFDX_AUTH_URL > sfdx_auth_url.txt
+          sfdx auth:sfdxurl:store --sfdxurlfile sfdx_auth_url.txt --setdefaultusername
+
+      
+
+      # Deploy changes to the org after merging to the main branch
+      - name: Deploy to Salesforce Org
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sfdx force:source:convert -d mdapi_output/
+          sfdx force:mdapi:deploy -d mdapi_output/ -u default -w -1
