@@ -1,50 +1,45 @@
 name: Salesforce CI/CD Pipeline
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
-      - feature/*
+      - main
 
 jobs:
-  validate-and-deploy:
+  validate-deploy:
+    name: Validate and Deploy to Salesforce
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Checkout the repository
-    - name: Checkout Repository
-      uses: actions/checkout@v2
+      # Checkout the repository
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    # Step 2: Authenticate Salesforce Org
-    - name: Authenticate Salesforce Dev Org
-      env:
-        SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL }}
-      run: sfdx auth:sfdxurl:store --setalias DevOrg --noninteractive
+      # Set up Salesforce CLI (sfdx)
+      - name: Install Salesforce CLI
+        run: |
+          sudo npm install --global sfdx-cli
 
-    # Step 3: Install Salesforce CLI
-    - name: Install Salesforce CLI
-      uses: amtrack/sfdx-actions@v2
-      with:
-        version: latest
+      # Authenticate with Salesforce Org
+      - name: Authenticate with Salesforce Org
+        env:
+          SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL }}
+        run: |
+          echo $SFDX_AUTH_URL > sfdx_auth_url.txt
+          sfdx auth:sfdxurl:store --sfdxurlfile sfdx_auth_url.txt --setdefaultusername
 
-    # Step 4: Run Code Validation
-    - name: Validate Code (Apex Tests, Lint, etc.)
-      run: |
-        sfdx force:source:push -u DevOrg
-        sfdx force:apex:test:run --resultformat human --outputdir test-results --wait 10
-        sfdx force:source:delete -u DevOrg -p force-app --noprompt
+      # Validate changes in the feature branch (checks metadata or code)
+      - name: Validate Deployment
+        run: |
+          sfdx force:source:convert -d mdapi_output/
+          sfdx force:mdapi:deploy -d mdapi_output/ -u default -c -w -1
 
-    # Step 5: Approve and Merge Code to Main
-    - name: Merge Code to Main Branch
-      if: success() && github.ref == 'refs/heads/feature/*'
-      uses: actions/github-script@v6
-      with:
-        script: |
-          const { execSync } = require('child_process');
-          execSync('git checkout main');
-          execSync('git merge ${{ github.ref }}');
-          execSync('git push origin main');
-
-    # Step 6: Deploy to Dev Org
-    - name: Deploy to Development Org
-      run: |
-        sfdx force:source:deploy -u DevOrg -p force-app
+      # Deploy changes to the org after merging to the main branch
+      - name: Deploy to Salesforce Org
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sfdx force:source:convert -d mdapi_output/
+          sfdx force:mdapi:deploy -d mdapi_output/ -u default -w -1
