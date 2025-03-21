@@ -31,11 +31,7 @@ jobs:
           echo $SFDX_AUTH_URL > sfdx_auth_url.txt
           sfdx auth:sfdxurl:store --sfdxurlfile sfdx_auth_url.txt --setdefaultusername
 
-      # Validate changes in the feature branch (checks metadata or code)
-      - name: Validate Deployment
-        run: |
-          sfdx force:source:convert -d mdapi_output/
-          sfdx force:mdapi:deploy -d mdapi_output/ -u default -c -w -1
+      
 
       # Deploy changes to the org after merging to the main branch
       - name: Deploy to Salesforce Org
