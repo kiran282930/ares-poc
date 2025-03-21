@@ -2,39 +2,39 @@ name: Salesforce Metadata Sync
 
 on:
   schedule:
-    # Run daily at midnight UTC
-    - cron: "0 0 * * *"
-  workflow_dispatch:  # Allows manual execution for testing
+    - cron: "0 0 * * *"  # Runs daily at midnight UTC
+  workflow_dispatch:
 
 jobs:
   sync-metadata:
-    runs-on: windows-latest  # Use Windows runner for PowerShell
+    runs-on: windows-latest  # Using Windows for PowerShell compatibility
 
     steps:
-      # Step 1: Check out the repository
+      # Step 1: Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v3
 
       # Step 2: Install Salesforce CLI
       - name: Install Salesforce CLI
-        run: npm install --global sfdx-cli
+        run: npm install --global @salesforce/cli
 
-         # Step 3: Authenticate Salesforce Orgs
-      - name: Authenticate Source Org (ares1Org)
-        run: |
-          echo "Authenticating ares1Org..."
-          sf auth:login --username ${{ secrets.SF_ORG_A_USERNAME }} --password ${{ secrets.SF_ORG_A_PASSWORD }} --setalias ares1Org
-      - name: Authenticate Target Org (ares2Org)
-        run: |
-          echo "Authenticating ares2Org..."
-          sf auth:login --username ${{ secrets.SF_ORG_B_USERNAME }} --password ${{ secrets.SF_ORG_B_PASSWORD }} --setalias ares2Org
+      # Step 3: Verify Salesforce CLI Installation
+      - name: Verify sf CLI Installation
+        run: sf --version
 
-      # Step 3: Run PowerShell Script with Credentials
+      # Step 4: Authenticate Source Org (ares1Org)
+      - name: Authenticate Source Org
+        run: |
+          sf login web --setalias ares1Org --instance-url https://login.salesforce.com
+        shell: pwsh  # Use PowerShell for execution
+
+      # Step 5: Authenticate Target Org (ares2Org)
+      - name: Authenticate Target Org
+        run: |
+          sf login web --setalias ares2Org --instance-url https://login.salesforce.com
+        shell: pwsh
+
+      # Step 6: Run the PowerShell Script
       - name: Execute Sync Script
         shell: pwsh
-        env:
-          SF_ORG_A_USERNAME: ${{ secrets.SF_ORG_A_USERNAME }}
-          SF_ORG_A_PASSWORD: ${{ secrets.SF_ORG_A_PASSWORD }}
-          SF_ORG_B_USERNAME: ${{ secrets.SF_ORG_B_USERNAME }}
-          SF_ORG_B_PASSWORD: ${{ secrets.SF_ORG_B_PASSWORD }}
-        run: ./scripts/ps1/SyncMetadata.ps1
+        run: ./scripts/SyncMetadata.ps1
