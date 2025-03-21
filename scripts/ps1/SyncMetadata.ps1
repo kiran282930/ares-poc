@@ -1,7 +1,7 @@
 # Variables
 $SourceOrg = "ares1Org"  # Alias for the source org
 $TargetOrg = "ares2Org"  # Alias for the target org
-$PackageXmlPath = "C:\Users\tpkkumar\OneDrive - Deloitte (O365D)\Documents\ARES_Poc\manifest\package.xml"  # Path to your package.xml file
+$PackageXmlPath = "manifest/package.xml"  # Path to your package.xml file
 
 # Step 1: Check for package.xml
 Write-Host "Checking if package.xml exists..."
