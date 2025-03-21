@@ -21,6 +21,16 @@ jobs:
 
         #run: npm install --global sfdx-cli
 
+         # Step 3: Authenticate Salesforce Orgs
+      - name: Authenticate Source Org (ares1Org)
+        run: |
+          echo "Authenticating ares1Org..."
+          sf auth:login --username ${{ secrets.SF_ORG_A_USERNAME }} --password ${{ secrets.SF_ORG_A_PASSWORD }} --setalias ares1Org
+      - name: Authenticate Target Org (ares2Org)
+        run: |
+          echo "Authenticating ares2Org..."
+          sf auth:login --username ${{ secrets.SF_ORG_B_USERNAME }} --password ${{ secrets.SF_ORG_B_PASSWORD }} --setalias ares2Org
+
       # Step 3: Run PowerShell Script with Credentials
       - name: Execute Sync Script
         shell: pwsh
