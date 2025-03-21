@@ -26,7 +26,7 @@ jobs:
       # Authenticate with Salesforce Org
       - name: Authenticate with Salesforce Org
         env:
-          SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL }}
+          SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL1 }}
         run: |
           echo $SFDX_AUTH_URL > sfdx_auth_url.txt
           sfdx auth:sfdxurl:store --sfdxurlfile sfdx_auth_url.txt --setdefaultusername
