@@ -1,5 +1,5 @@
 public class HelloWorld {
     public static void printMessage() {
-        System.debug('Hello, World!');//helllooooooooo
+        System.debug('Hello, World!');//o
     }
 }
