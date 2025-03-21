@@ -35,6 +35,14 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "[create-pull-request] automated change"
+          committer: GitHub <noreply@github.com>
+          author: kiran282930 <kiran282930@users.noreply.github.com>
+          branch: create-pull-request/patch
+          delete-branch: false
+          title: "Changes by create-pull-request action"
+          body: "Automated changes by [create-pull-request](https://github.com/peter-evans/create-pull-request) GitHub action"
+          draft: false
 
   # Step 3: Deploy to Dev Copy Org
   deploy-to-dev-copy:
