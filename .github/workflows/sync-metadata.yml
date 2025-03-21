@@ -17,7 +17,9 @@ jobs:
 
       # Step 2: Install Salesforce CLI
       - name: Install Salesforce CLI
-        run: npm install --global sfdx-cli
+        run: npm install --global @salesforce/cli
+
+        #run: npm install --global sfdx-cli
 
       # Step 3: Run PowerShell Script with Credentials
       - name: Execute Sync Script
