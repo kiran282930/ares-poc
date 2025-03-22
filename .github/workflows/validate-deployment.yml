@@ -57,7 +57,7 @@ jobs:
 
       - name: "Populate auth file with SFDX_URL secret of integration org"
         run: |
-          echo ${{ secrets.SFDX_INTEGRATION_URL }} > ./SFDX_INTEGRATION_URL.txt
+          echo ${{ secrets.SFDX_AUTH_URL1 }} > ./SFDX_INTEGRATION_URL.txt
 
       - name: "Authenticate to Integration Org"
         run: sf org login sfdx-url -f ./SFDX_INTEGRATION_URL.txt -s -a integration
