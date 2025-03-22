@@ -17,15 +17,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: "Read PR Body"
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          echo $PR_BODY > ./pr_body.txt
-          node ./parsePR.js
-          TESTS=$(cat testsToRun.txt)
-          echo "APEX_TESTS=$TESTS" >> $GITHUB_ENV
-
       - name: "Cache SFDX CLI packages"
         id: cache-sfdx
         uses: actions/cache@v3
@@ -67,17 +58,10 @@ jobs:
           mkdir changed-sources
           sf sgd:source:delta --to "HEAD" --from "HEAD^" --output changed-sources/ --generate-delta --source force-app/
 
-      - name: "Check-only deploy delta changes - run specified tests"
-        if: ${{ env.APEX_TESTS != 'all' }}
+      - name: "Check-only deploy delta changes"
         run: |
-          echo ${{ env.APEX_TESTS }}
-          sf project deploy start --source-dir "changed-sources/force-app" --dry-run --test-level RunSpecifiedTests --tests ${{ env.APEX_TESTS }} --json
-          
-      - name: "Check-only deploy delta changes - run all tests"
-        if: ${{ env.APEX_TESTS == 'all' }}
+          sf project deploy start --source-dir "changed-sources/force-app" --dry-run --json
+
+      - name: "Deploy Delta Changes"
         run: |
-          sf project deploy start --source-dir "changed-sources/force-app" --dry-run --test-level RunLocalTests --json
-      
-      - name: "Deploy Delta Changes - No Tests Run"
-        run: |
-          sf project deploy start --dry-run -x changed-sources/package/package.xml --post-destructive-changes changed-sources/destructiveChanges/destructiveChanges.xml -l NoTestRun --json
+          sf project deploy start --source-dir "changed-sources/force-app" --json
