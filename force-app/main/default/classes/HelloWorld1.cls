@@ -1,5 +1,5 @@
 public class HelloWorld1 {
     public static void printMessage() {
-        System.debug('Hello, World!');//pritt ttttsss
+        System.debug('Hello, World! new check');
     }
 }
