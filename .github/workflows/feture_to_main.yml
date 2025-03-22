@@ -3,7 +3,7 @@ name: Feature to Main Commit Workflow
 on:
   push:
     branches:
-      - feature/* # Trigger on pushes to any feature branch
+      - main # Trigger on pushes to any feature branch
 
 jobs:
   commit-and-merge:
