@@ -1,34 +1,83 @@
-name: Feature to Main Commit Workflow
+name: Validate to main branch
 
 on:
-  push:
-    branches:
-      - main # Trigger on pushes to any feature branch
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+    paths:
+      - "force-app/**"
 
 jobs:
-  commit-and-merge:
+  deployment-on-main-org:
     runs-on: ubuntu-latest
-
+    if: ${{ github.actor != 'dependabot[bot]' }}
     steps:
-      # Step 1: Check out the repository
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: "Checkout source code"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Step 2: Ensure the latest code on main branch
-      - name: Fetch main branch
+      - name: "Read PR Body"
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          git fetch origin main
-          git checkout main
+          echo $PR_BODY > ./pr_body.txt
+          node ./parsePR.js
+          TESTS=$(cat testsToRun.txt)
+          echo "APEX_TESTS=$TESTS" >> $GITHUB_ENV
 
-      # Step 3: Merge feature branch into main
-      - name: Merge Feature into Main
-        run: |
-          git merge --no-ff ${{ github.ref_name }} # Merges the current feature branch
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          git push origin main # Push changes to main branch
+      - name: "Cache SFDX CLI packages"
+        id: cache-sfdx
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-sfdx-cli-modules
+        with:
+          path: ~/sf
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/sfdx-project.json') }}
 
-      # Step 4: Deploy to Salesforce Org (Optional)
-      - name: Deploy to Salesforce Dev Org
+      - name: "Install Salesforce CLI"
+        if: ${{ steps.cache-sfdx.outputs.cache-hit != 'true' }}
         run: |
-          sfdx force:source:deploy -x manifest/package.xml
+          wget https://developer.salesforce.com/media/salesforce-cli/sf/channels/stable/sf-linux-x64.tar.xz
+          mkdir -p ~/sf
+          tar xJf sf-linux-x64.tar.xz -C ~/sf --strip-components 1
+          echo "$HOME/sf/bin" >> $GITHUB_PATH
+          ~/sf/bin/sf version
+
+      - name: "Update SFDX"
+        if: ${{ steps.cache-sfdx.outputs.cache-hit == 'true' }}
+        run: |
+          echo "$HOME/sf/bin" >> $GITHUB_PATH
+          ~/sf/bin/sf version
+
+      - name: "Installing sfdx git delta"
+        run: |
+          echo y | sf plugins:install sfdx-git-delta
+          sf plugins
+
+      - name: "Populate auth file with SFDX_URL secret of integration org"
+        run: |
+          echo ${{ secrets.SFDX_AUTH_URL1 }} > ./SFDX_INTEGRATION_URL.txt
+
+      - name: "Authenticate to Integration Org"
+        run: sf org login sfdx-url -f ./SFDX_INTEGRATION_URL.txt -s -a integration
+
+      - name: "Create delta packages for new, modified or deleted metadata"
+        run: |
+          mkdir changed-sources
+          sf sgd:source:delta --to "HEAD" --from "HEAD^" --output changed-sources/ --generate-delta --source force-app/
+
+      - name: "Check-only deploy delta changes - run specified tests"
+        if: ${{ env.APEX_TESTS != 'all' }}
+        run: |
+          echo ${{ env.APEX_TESTS }}
+          sf project deploy start --source-dir "changed-sources/force-app" --dry-run --test-level RunSpecifiedTests --tests ${{ env.APEX_TESTS }} --json
+          
+      - name: "Check-only deploy delta changes - run all tests"
+        if: ${{ env.APEX_TESTS == 'all' }}
+        run: |
+          sf project deploy start --source-dir "changed-sources/force-app" --dry-run --test-level RunLocalTests --json
+      
+      - name: "Deploy Delta Changes - No Tests Run"
+        run: |
+          sf project deploy start --dry-run -x changed-sources/package/package.xml --post-destructive-changes changed-sources/destructiveChanges/destructiveChanges.xml -l NoTestRun --json
