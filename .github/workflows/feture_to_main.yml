@@ -53,14 +53,14 @@ jobs:
       - name: "Authenticate to Integration Org"
         run: sf org login sfdx-url -f ./SFDX_INTEGRATION_URL.txt -s -a integration
 
-      - name: "Create delta packages for new, modified or deleted metadata"
-        run: |
-          mkdir changed-sources
-          sf sgd:source:delta --to "HEAD" --from "HEAD^" --output changed-sources/ --generate-delta --source force-app/
+      #- name: "Create delta packages for new, modified or deleted metadata"
+       # run: |
+        #  mkdir changed-sources
+         # sf sgd:source:delta --to "HEAD" --from "HEAD^" --output changed-sources/ --generate-delta --source force-app/
 
-      - name: "Check-only deploy delta changes"
-        run: |
-          sf project deploy start --source-dir "changed-sources/force-app" --dry-run --json
+      #- name: "Check-only deploy delta changes"
+       # run: |
+        #  sf project deploy start --source-dir "changed-sources/force-app" --dry-run --json
 
       - name: "Deploy Delta Changes"
         run: |
