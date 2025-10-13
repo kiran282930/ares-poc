@@ -1,0 +1,70 @@
+import { LightningElement, wire, track } from 'lwc';
+import getEmbeddingDataForReport from '@salesforce/apex/PowerBiEmbedManager.getEmbeddingDataForReport';
+
+export default class PowerBiReport extends LightningElement {
+    @track report;
+    @track error;
+    isLoading = true;
+
+    @wire(getEmbeddingDataForReport)
+    wiredReport({ data, error }) {
+        if (data) {
+            console.log('✅ Report data received:', data);
+            this.report = data;
+            this.error = null;
+            this.isLoading = false;
+            this.embedReport();
+        } else if (error) {
+            console.error('❌ Error fetching report data:', error);
+            this.error = error;
+            this.isLoading = false;
+        }
+    }
+
+    embedReport() {
+        if (!this.report?.embedUrl || !this.report?.embedToken) {
+            console.warn('⚠️ Missing embed URL or token');
+            return;
+        }
+
+        const container = this.template.querySelector('[data-id="embed-container"]');
+        if (!container) {
+            console.warn('⚠️ No container found for embedding');
+            return;
+        }
+
+        // Clear any previous content
+        container.innerHTML = '';
+
+        // Construct the Power BI iframe URL
+        const iframeUrl = `${this.report.embedUrl}&filterPaneEnabled=false&navContentPaneEnabled=false`;
+
+        // Create the iframe element
+        const iframe = document.createElement('iframe');
+        iframe.src = iframeUrl;
+        iframe.width = '100%';
+        iframe.height = '600';
+        iframe.frameBorder = '0';
+        iframe.allowFullScreen = true;
+        iframe.sandbox = 'allow-scripts allow-same-origin allow-popups allow-forms';
+        iframe.referrerPolicy = 'no-referrer-when-downgrade';
+
+        // Append the iframe to the container
+        container.appendChild(iframe);
+
+        console.log('✅ Power BI report embedded via iframe');
+    }
+}
+
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+  <apiVersion>61.0</apiVersion>
+  <isExposed>true</isExposed>
+  <targets>
+    <target>lightning__RecordPage</target>
+    <target>lightning__AppPage</target>
+    <target>lightning__HomePage</target>
+  </targets>
+</LightningComponentBundle>
