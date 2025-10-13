@@ -1,0 +1,32 @@
+<template>
+  <lightning-card title="📊 FLOW Pipeline Report" icon-name="utility:graph">
+    <div class="slds-m-around_medium">
+
+      <!-- Loading spinner -->
+      <template if:true={isLoading}>
+        <lightning-spinner alternative-text="Loading Power BI report..." size="medium"></lightning-spinner>
+      </template>
+
+      <!-- Error handling -->
+      <template if:true={error}>
+        <div class="slds-text-color_error slds-m-top_medium">
+          ⚠️ {error.body ? error.body.message : error}
+        </div>
+      </template>
+
+      <!-- Embed container -->
+      <template if:true={report}>
+        <template if:true={report.embedUrl}>
+          <div data-id="embed-container" style="height: 600px;"></div>
+        </template>
+
+        <template if:true={report.error}>
+          <div class="slds-text-color_error slds-m-top_medium">
+            ⚠️ {report.error}
+          </div>
+        </template>
+      </template>
+
+    </div>
+  </lightning-card>
+</template>
