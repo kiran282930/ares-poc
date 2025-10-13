@@ -1,0 +1,356 @@
+public with sharing class PowerBiEmbedManager {
+    
+    public PowerBiEmbedManager() {}
+    
+    public class ClientCredentialPostData {
+        public String client_id;
+        public String client_info;
+        public string client_secret;
+        public String scope;
+        public string grant_type;
+        public String getPostData(){
+          return 'client_id=' + this.client_id + 
+                '&client_info=' + this.client_info +
+                '&client_secret=' + this.client_secret +
+                '&scope=' + this.scope +
+                '&grant_type=' + grant_type;
+        }
+    }
+
+    public class ClientCredentialResponse {
+    	public String access_token;
+        public String expires_in;
+        public String ext_expires_in;
+        public String token_type;
+    }
+    
+    public class PowerBiReport    {
+        public String id { get; set; } 
+        public String reportType { get; set; } 
+        public String name { get; set; } 
+        public String webUrl { get; set; } 
+        public String embedUrl { get; set; } 
+        public boolean isFromPbix { get; set; } 
+        public boolean isOwnedByMe { get; set; } 
+        public String datasetId { get; set; } 
+   }
+    
+    public class PowerBiEmbedToken    {
+        public string token { get; set; } 
+        public string tokenId { get; set; } 
+        public DateTime expiration { get; set; } 
+    }
+ 
+    public class PowerBiReportData    {
+    	@AuraEnabled
+        public String workspaceId { get; set; } 
+    	@AuraEnabled
+        public String reportId { get; set; } 
+    	@AuraEnabled
+        public String name { get; set; } 
+    	@AuraEnabled
+        public String embedUrl { get; set; } 
+    	@AuraEnabled
+        public String embedToken { get; set; } 
+    	@AuraEnabled
+        public DateTime embedTokenExpires { get; set; } 
+        @AuraEnabled
+        public String error { get; set; } 
+     }
+    
+    public static String getPowerBiAccessToken() {
+
+        // get auth settings from Custom Metadata Type reconrd
+        Power_BI_Auth_Setting__mdt authSetting = Power_BI_Auth_Setting__mdt.getInstance('PowerBiApp');
+        string TenantId = authSetting.TenantId__c;    
+        string ClientId = authSetting.ClientId__c;    
+        string ClientSecret = authSetting.ClientSecret__c;        
+        System.debug('TenantId: ' + TenantId);
+        System.debug('ClientId: ' + ClientId);
+        System.debug('ClientSecret: ' + ClientSecret);
+        // construct URL for client credentials flow
+        String aadTokenEndpoint = 'https://login.microsoftonline.com/' + TenantId + '/oauth2/v2.0/token';
+
+        // prepare HTTP request 
+        HttpRequest reqClientCredentialsFlow = new HttpRequest();
+        reqClientCredentialsFlow.setMethod('POST');
+        reqClientCredentialsFlow.setEndpoint(aadTokenEndpoint);        
+        reqClientCredentialsFlow.setHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+        // compose data for POST body
+        ClientCredentialPostData postData = new ClientCredentialPostData();
+		postData.client_id = ClientId;
+		postData.client_info = '1';
+		postData.client_secret = ClientSecret;
+		postData.scope = 'https://analysis.windows.net/powerbi/api/.default';
+		postData.grant_type = 'client_credentials';        
+        String postBody = postData.getPostData();
+        reqClientCredentialsFlow.setBody(postBody);
+
+        // send HTTP POST to execute client credentials flow
+        Http http = new Http();        
+        HttpResponse response = http.send(reqClientCredentialsFlow);
+        // check response for success
+        if(response.getStatusCode()!=200){
+            System.debug('ERROR --- Getting Access Token --- ERROR');
+            System.debug('Status Code: ' + response.getStatusCode());
+            return null;            
+        }
+        else    
+            System.debug('SUCCESS --- Getting Access Token --- SUCCESS');   
+        // extract and return app-only access token for service principal
+        String responseJson = response.getBody();
+        ClientCredentialResponse responseData = (ClientCredentialResponse)JSON.deserialize(responseJson, ClientCredentialResponse.class);
+        String access_token = responseData.access_token;         
+        return access_token;
+    }
+   
+    @AuraEnabled(cacheable=true)
+    public static PowerBiReportData getEmbeddingDataForReport() {
+        System.debug('Inside getEmbeddingDataForReport');
+        // get access token for Authorization header        
+        String access_token = getPowerBiAccessToken();        
+        Power_BI_Auth_Setting__mdt authSetting = Power_BI_Auth_Setting__mdt.getInstance('PowerBiApp');
+        String WorkspaceId = authSetting.WorkSpaceId__c;          
+        String ReportId = authSetting.ReportId__c;//'d06d3255-6fe7-41ad-b36e-736595369bcc';
+         //String WorkspaceId = '993b2d73-1673-4ab5-ae20-ae513ca1277a';
+         //String ReportId = '812c7e06-1ad5-4ee6-a71a-2ceefb4a6b53';
+        //https://app.powerbi.com/groups/dd9b20df-d149-4cfa-855c-88df228fabc5/reports/bc17fc9c-de12-411e-a422-f4930946df61/ReportSection162cc487cba7a81c97b7?experience=power-bi
+        // Call to Power BI Service API to get report data for embedding        
+        HttpRequest reqGetReport = new HttpRequest();
+        reqGetReport.setMethod('GET');
+        String urlGetReport = 'https://api.powerbi.com/v1.0/myorg/groups/' + WorkspaceId + '/reports/' + ReportId;
+        reqGetReport.setEndpoint(urlGetReport);
+        System.debug('Access Token is :' + access_token);
+        reqGetReport.setHeader('Authorization', 'Bearer ' + access_token);
+        
+        Http http = new Http();        
+        HttpResponse response = http.send(reqGetReport);
+        
+        // check response for success
+        if(response.getStatusCode()!=200){
+            System.debug('ERROR --- Getting Report Data --- ERROR');
+            System.debug('Status Code: ' + response.getStatusCode());
+            PowerBiReportData getReportError = new PowerBiReportData();
+            getReportError.error = 'Get Report Error: ' + response.getStatus();
+            return getReportError;            
+        }            
+    
+        // extract Power BI report data from JSON response
+        String responseJson = response.getBody();
+        PowerBiReport powerBiReport = (PowerBiReport)JSON.deserialize(responseJson, PowerBiReport.class);
+        
+        // send report info to debug window
+        System.debug('id: ' + powerBiReport.id);        
+        System.debug('reportType: ' + powerBiReport.reportType);        
+        System.debug('name: ' + powerBiReport.name);  
+        System.debug('webUrl: ' + powerBiReport.webUrl);      
+        System.debug('embedUrl: ' + powerBiReport.embedUrl);        
+        System.debug('isFromPbix: ' + powerBiReport.isFromPbix);        
+        System.debug('isOwnedByMe: ' + powerBiReport.isOwnedByMe);        
+        System.debug('datasetId: ' + powerBiReport.datasetId);        
+
+	    // Call to Power BI Service API to get embed token for report        
+        HttpRequest reqGetEmbedToken = new HttpRequest();
+        reqGetEmbedToken.setMethod('POST');
+        String urlGetEmbedToken = 'https://api.powerbi.com/v1.0/myorg/groups/' + WorkspaceId + '/reports/' + ReportId + '/GenerateToken';
+        reqGetEmbedToken.setEndpoint(urlGetEmbedToken);
+        System.debug('urlGetEmbedToken ' + urlGetEmbedToken);
+        reqGetEmbedToken.setHeader('Authorization', 'Bearer ' + access_token);
+        reqGetEmbedToken.setHeader('Content-Type', 'application/json');
+
+        //String reqBodyEmbedToken= '{"accessLevel": "View","allowSaveAs":"false", "identities": [{"username": "pvirani@aresmgmt.com","roles": ["RLS_Security_IR", "RLS_Security_SRM"],"datasets": "["b6ce6e59-1d04-4ee0-afa5-b89cf226df9f"]"}]}';
+        //String reqBodyET = '{"accessLevel": "View","allowSaveAs": false,"identities": [{"username": "pvirani@aresmgmt.com","roles": ["RLS_Security_IR", "RLS_Security_SRM"],"datasets": ["b6ce6e59-1d04-4ee0-afa5-b89cf226df9f"]}]}';   
+        
+            String reqBodyET = 
+                '{' +
+                '"accessLevel": "View",' +
+                '"allowSaveAs": false,' +
+                '"identities": [' +
+                    '{' +
+                    '"username": "'+UserInfo.getUserEmail()+'",' +
+                    '"roles": ["RLS_Security_IR", "RLS_Security_SRM"],' +
+                    '"datasets": ["'+powerBiReport.datasetId+'"]' +
+                    '}' +
+                ']' +
+                '}';
+
+        System.debug('reqBodyEmbedToken ' + reqBodyET);
+        reqGetEmbedToken.setBody(reqBodyET);
+        //,"datasetId": }'
+
+        HttpResponse responseEmbedToken = http.send(reqGetEmbedToken);
+
+        // check response for success
+        if(responseEmbedToken.getStatusCode()!=200){
+            System.debug('ERROR --- Getting Embed Token --- ERROR');
+            System.debug('Status Code: ' + responseEmbedToken.getStatusCode());            
+            PowerBiReportData getEmbedTokenError = new PowerBiReportData();
+            getEmbedTokenError.error = 'Get Embed Token Error: ' + response.getStatus();
+            //return getEmbedTokenError;            
+        }            
+
+        // extract Power BI embed token and expiration
+        PowerBiEmbedToken embedToken = (PowerBiEmbedToken)JSON.deserialize(responseEmbedToken.getBody(), PowerBiEmbedToken.class);
+        
+        // send report info to debug window
+        System.debug('EmbedToken: ' + embedToken.token);        
+        System.debug('EmbedToken ID: ' + embedToken.tokenId);        
+        System.debug('expiration: ' + embedToken.expiration);
+        
+        // create custom remote-able object to return to caller in browser 
+        PowerBiReportData powerBiReportData = new PowerBiReportData();        
+        powerBiReportData.workspaceId = WorkspaceId;
+        powerBiReportData.reportId = ReportId;
+        powerBiReportData.name = powerBiReport.name;
+        powerBiReportData.embedUrl = powerBiReport.embedUrl;
+        powerBiReportData.embedToken = embedToken.token;
+        powerBiReportData.embedTokenExpires = embedToken.expiration;
+        
+        return powerBiReportData;            
+ 
+    }
+
+
+
+    import { LightningElement, api, wire, track } from 'lwc';
+import getEmbeddingDataForReport from '@salesforce/apex/PowerBiEmbedManager.getEmbeddingDataForReport';
+import powerbijs from '@salesforce/resourceUrl/powerbijs';
+import { loadScript, loadStyle } from 'lightning/platformResourceLoader';
+import NoHeader from '@salesforce/resourceUrl/NoHeader';
+
+export default class PowerBiReport extends LightningElement {
+  @api WorkspaceId = '';
+  @api ReportId = '';
+  @track report;
+  isPowerBiLoaded = false;
+  isReportEmbedded = false;
+  isLoading = true;
+
+  @wire(getEmbeddingDataForReport)
+  wiredReport(response) {
+    console.log('🔄 Wire triggered');
+    this.report = response;
+
+    if (response.data) {
+      console.log('✅ Report data received:', response.data);
+      this.isLoading = false;
+      this.tryEmbedReport();
+    } else if (response.error) {
+      console.error('❌ Error fetching report data:', response.error);
+      this.isLoading = false;
+    }
+  }
+
+  connectedCallback() {
+    console.log('📦 connectedCallback');
+    loadStyle(this, NoHeader);
+  }
+
+  renderedCallback() {
+    console.log('🎨 renderedCallback');
+
+    if (!this.isPowerBiLoaded) {
+      loadScript(this, powerbijs)
+        .then(() => {
+          this.isPowerBiLoaded = true;
+          console.log('✅ PowerBI script loaded');
+          this.tryEmbedReport();
+        })
+        .catch(error => {
+          console.error('❌ Error loading PowerBI script:', error);
+        });
+    } else {
+      this.tryEmbedReport();
+    }
+  }
+
+  tryEmbedReport() {
+    console.log('📊 tryEmbedReport called');
+
+    if (this.isReportEmbedded) {
+      console.log('ℹ️ Report already embedded');
+      return;
+    }
+
+    if (!this.isPowerBiLoaded || !this.report || !this.report.data) {
+      console.log('⏳ Waiting for script or report data');
+      return;
+    }
+
+    const reportContainer = this.template.querySelector('[data-id="embed-container"]');
+    if (!reportContainer) {
+      console.warn('⚠️ Report container not found');
+      return;
+    }
+
+    const { reportId, embedUrl, embedToken } = this.report.data;
+
+    if (!reportId || !embedUrl || !embedToken) {
+      console.warn('⚠️ Missing required embed values');
+      return;
+    }
+
+    // Minimal, safe config
+    const config = {
+      type: 'report',
+      id: String(reportId),
+      embedUrl: String(embedUrl),
+      accessToken: String(embedToken),
+      tokenType: 1
+    };
+     const safeconfig= JSON.parse(JSON.stringify(config));
+    console.log('🧾 Final embed config:', JSON.stringify(config));
+
+    try {
+      window.powerbi.embed(reportContainer, safeconfig);
+      console.log('✅ PowerBI report embedded');
+      this.isReportEmbedded = true;
+    } catch (error) {
+      console.error('❌ Error embedding report:', error);
+    }
+  }
+
+  disconnectedCallback() {
+    console.log('🧹 disconnectedCallback');
+    const reportContainer = this.template.querySelector('[data-id="embed-container"]');
+    if (reportContainer && window.powerbi) {
+      window.powerbi.reset(reportContainer);
+      console.log('🧼 PowerBI report reset');
+    }
+  }
+}
+
+
+
+<template>
+  <lightning-card title="FLOW Pipeline Report" icon-name="utility:graph">
+    <div class="slds-m-around_medium">
+
+      <!-- Loading or missing data -->
+      <template if:false={report}>
+        <lightning-spinner alternative-text="Loading report..." size="medium"></lightning-spinner>
+      </template>
+
+      <!-- Error message -->
+      <template if:true={report}>
+        <template if:true={report.data}>
+          <template if:true={report.data.error}>
+            <div class="slds-text-color_error">
+              ⚠️ {report.data.error}
+            </div>
+          </template>
+
+          <!-- Embed container -->
+          <template if:true={report.data.embedUrl}>
+            <div data-id="embed-container" style="height: 600px;"></div>
+          </template>
+        </template>
+      </template>
+
+    </div>
+  </lightning-card>
+</template>
+
+
+}
